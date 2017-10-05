@@ -36,6 +36,11 @@ Base class for specific OAuth2 flow implementations.
 */
 open class OAuth2: OAuth2Base {
 	
+	/// Whether the flow type mandates client identification.
+	open class var clientIdMandatory: Bool {
+		return true
+	}
+	
 	/// If non-nil, will be called before performing dynamic client registration, giving you a chance to instantiate your own registrar.
 	public final var onBeforeDynamicClientRegistration: ((URL) -> OAuth2DynReg?)?
 	
@@ -48,25 +53,27 @@ open class OAuth2: OAuth2Base {
 	
 	The following settings keys are currently supported:
 	
-	- client_id (string)
-	- client_secret (string), usually only needed for code grant
-	- authorize_uri (URL-string)
-	- token_uri (URL-string), if omitted the authorize_uri will be used to obtain tokens
-	- redirect_uris (list of URL-strings)
-	- scope (string)
+	- client_id (String)
+	- client_secret (String), usually only needed for code grant
+	- authorize_uri (URL-String)
+	- token_uri (URL-String), if omitted the authorize_uri will be used to obtain tokens
+	- redirect_uris (Array of URL-Strings)
+	- scope (String)
 	
-	- client_name (string)
-	- registration_uri (URL-string)
-	- logo_uri (URL-string)
+	- client_name (String)
+	- registration_uri (URL-String)
+	- logo_uri (URL-String)
 	
-	- keychain (bool, true by default, applies to using the system keychain)
-	- keychain_access_mode (string, value for keychain kSecAttrAccessible attribute, kSecAttrAccessibleWhenUnlocked by default)
-	- keychain_access_group (string, value for keychain kSecAttrAccessGroup attribute, nil by default)
-	- keychain_account_for_client_credentials(string, "clientCredentials" by default)
-	- keychain_account_for_tokens(string, "currentTokens" by default)
+	- keychain (Bool, true by default, applies to using the system keychain)
+	- keychain_access_mode (String, value for keychain kSecAttrAccessible attribute, kSecAttrAccessibleWhenUnlocked by default)
+	- keychain_access_group (String, value for keychain kSecAttrAccessGroup attribute, nil by default)
+	- keychain_account_for_client_credentials(String, "clientCredentials" by default)
+	- keychain_account_for_tokens(String, "currentTokens" by default)
+	- secret_in_body (Bool, false by default, forces the flow to use the request body for the client secret)
+	- parameters ([String: String], custom request parameters to be added during authorization)
+	- token_assume_unexpired (Bool, true by default, whether to use access tokens that do not come with an "expires_in" parameter)
+	
 	- verbose (bool, false by default, applies to client logging)
-	- secret_in_body (bool, false by default, forces the flow to use the request body for the client secret)
-	- token_assume_unexpired (bool, true by default, whether to use access tokens that do not come with an "expires_in" parameter)
 	*/
 	override public init(settings: OAuth2JSON) {
 		super.init(settings: settings)
@@ -84,27 +91,22 @@ open class OAuth2: OAuth2Base {
 	This method will first check if the client already has an unexpired access token (possibly from the keychain), if not and it's able to
 	use a refresh token it will try to use the refresh token. If this fails it will check whether the client has a client_id and show the
 	authorize screen if you have `authConfig` set up sufficiently. If `authConfig` is not set up sufficiently this method will end up
-	calling the `onFailure` callback. If client_id is not set but a "registration_uri" has been provided, a dynamic client registration will
-	be attempted and if it success, an access token will be requested.
+	calling the callback with a failure. If client_id is not set but a "registration_uri" has been provided, a dynamic client registration
+	will be attempted and if it success, an access token will be requested.
 	
 	- parameter params:   Optional key/value pairs to pass during authorization and token refresh
-	- parameter callback: The callback to call when authorization finishes (parameters will be non-nil but may be an empty dict), fails or is
-	                      cancelled (error will be non-nil, e.g. `.requestCancelled` if auth was aborted)
+	- parameter callback: The callback to call when authorization finishes (parameters will be non-nil but may be an empty dict), fails or
+	                      is canceled (error will be non-nil, e.g. `.requestCancelled` if auth was aborted)
 	*/
 	public final func authorize(params: OAuth2StringDict? = nil, callback: @escaping ((OAuth2JSON?, OAuth2Error?) -> Void)) {
 		if isAuthorizing {
 			callback(nil, OAuth2Error.alreadyAuthorizing)
 			return
 		}
-		var prms = authParameters
-		if nil != prms, let params = params {
-			params.forEach() { prms![$0] = $1 }
-		}
-		let useParams = prms ?? params
 		
 		didAuthorizeOrFail = callback
 		logger?.debug("OAuth2", msg: "Starting authorization")
-		tryToObtainAccessTokenIfNeeded(params: useParams) { successParams in
+		tryToObtainAccessTokenIfNeeded(params: params) { successParams in
 			if let successParams = successParams {
 				self.didAuthorize(withParameters: successParams)
 			}
@@ -116,7 +118,7 @@ open class OAuth2: OAuth2Base {
 					else {
 						do {
 							assert(Thread.isMainThread)
-							try self.doAuthorize(params: useParams)
+							try self.doAuthorize(params: params)
 						}
 						catch let error {
 							self.didFail(with: error.asOAuth2Error)
@@ -128,25 +130,14 @@ open class OAuth2: OAuth2Base {
 	}
 	
 	/**
-	This method is deprecated in version 3.0 and has been replaced with `authorize(params:callback:)`.
-	
-	- parameter params: Optional key/value pairs to pass during authorization and token refresh
-	*/
-	@available(*, deprecated: 3.0, message: "Use the `authorize(params:callback:)` method and variants")
-	public final func authorize(params: OAuth2StringDict? = nil) {
-		authorize(params: params) { parameters, error in
-		}
-	}
-	
-	/**
 	Shortcut function to start embedded authorization from the given context (a UIViewController on iOS, an NSWindow on OS X).
 	
 	This method sets `authConfig.authorizeEmbedded = true` and `authConfig.authorizeContext = <# context #>`, then calls `authorize()`
 	
 	- parameter from:     The context to start authorization from, depends on platform (UIViewController or NSWindow, see `authorizeContext`)
 	- parameter params:   Optional key/value pairs to pass during authorization
-	- parameter callback: The callback to call when authorization finishes (parameters will be non-nil but may be an empty dict), fails or is
-	                      cancelled (error will be non-nil, e.g. `.requestCancelled` if auth was aborted)
+	- parameter callback: The callback to call when authorization finishes (parameters will be non-nil but may be an empty dict), fails or
+	                      is canceled (error will be non-nil, e.g. `.requestCancelled` if auth was aborted)
 	*/
 	open func authorizeEmbedded(from context: AnyObject, params: OAuth2StringDict? = nil, callback: @escaping ((_ authParameters: OAuth2JSON?, _ error: OAuth2Error?) -> Void)) {
 		if isAuthorizing {		// `authorize()` will check this, but we want to exit before changing `authConfig`
@@ -156,18 +147,6 @@ open class OAuth2: OAuth2Base {
 		authConfig.authorizeEmbedded = true
 		authConfig.authorizeContext = context
 		authorize(params: params, callback: callback)
-	}
-	
-	/**
-	This method is deprecated in version 3.0 and has been replaced with `authorizeEmbedded(from:params:callback:)`.
-	
-	- parameter from:    The context to start authorization from, depends on platform (UIViewController or NSWindow, see `authorizeContext`)
-	- parameter params:  Optional key/value pairs to pass during authorization
-	*/
-	@available(*, deprecated: 3.0, message: "Use the `authorize(params:callback:)` method and variants")
-	open func authorizeEmbedded(from context: AnyObject, params: OAuth2StringDict? = nil) {
-		authorizeEmbedded(from: context, params: params) { parameters, error in
-		}
 	}
 	
 	/**
@@ -270,25 +249,31 @@ open class OAuth2: OAuth2Base {
 	Method that creates the OAuth2AuthRequest instance used to create the authorize URL
 	
 	- parameter redirect: The redirect URI string to supply. If it is nil, the first value of the settings' `redirect_uris` entries is
-                          used. Must be present in the end!
+	                      used. Must be present in the end!
 	- parameter scope:    The scope to request
 	- parameter params:   Any additional parameters as dictionary with string keys and values that will be added to the query part
 	- returns:            OAuth2AuthRequest to be used to call to the authorize endpoint
 	*/
 	func authorizeRequest(withRedirect redirect: String, scope: String?, params: OAuth2StringDict?) throws -> OAuth2AuthRequest {
-		guard let clientId = clientConfig.clientId, !clientId.isEmpty else {
+		let clientId = clientConfig.clientId
+		if type(of: self).clientIdMandatory && (nil == clientId || clientId!.isEmpty) {
 			throw OAuth2Error.noClientId
 		}
 		
 		let req = OAuth2AuthRequest(url: clientConfig.authorizeURL, method: .GET)
 		req.params["redirect_uri"] = redirect
-		req.params["client_id"] = clientId
 		req.params["state"] = context.state
-		if let scope = scope ?? clientConfig.scope {
-			req.params["scope"] = scope
+		if let clientId = clientId {
+			req.params["client_id"] = clientId
 		}
 		if let responseType = type(of: self).responseType {
 			req.params["response_type"] = responseType
+		}
+		if let scope = scope ?? clientConfig.scope {
+			req.params["scope"] = scope
+		}
+		if clientConfig.safariCancelWorkaround {
+			req.params["swa"] = "\(Date.timeIntervalSinceReferenceDate)" // Safari issue workaround
 		}
 		req.add(params: params)
 		
@@ -309,7 +294,7 @@ open class OAuth2: OAuth2Base {
 	Convenience method to be overridden by and used from subclasses.
 	
 	- parameter redirect: The redirect URI string to supply. If it is nil, the first value of the settings' `redirect_uris` entries is
-                          used. Must be present in the end!
+	                      used. Must be present in the end!
 	- parameter scope:    The scope to request
 	- parameter params:   Any additional parameters as dictionary with string keys and values that will be added to the query part
 	- returns:            NSURL to be used to start the OAuth dance
@@ -335,7 +320,8 @@ open class OAuth2: OAuth2Base {
 	- returns:          An `OAuth2AuthRequest` instance that is configured for token refresh
 	*/
 	open func tokenRequestForTokenRefresh(params: OAuth2StringDict? = nil) throws -> OAuth2AuthRequest {
-		guard let clientId = clientId, !clientId.isEmpty else {
+		let clientId = clientConfig.clientId
+		if type(of: self).clientIdMandatory && (nil == clientId || clientId!.isEmpty) {
 			throw OAuth2Error.noClientId
 		}
 		guard let refreshToken = clientConfig.refreshToken, !refreshToken.isEmpty else {
@@ -345,7 +331,9 @@ open class OAuth2: OAuth2Base {
 		let req = OAuth2AuthRequest(url: (clientConfig.tokenURL ?? clientConfig.authorizeURL))
 		req.params["grant_type"] = "refresh_token"
 		req.params["refresh_token"] = refreshToken
-		req.params["client_id"] = clientId
+		if let clientId = clientId {
+			req.params["client_id"] = clientId
+		}
 		req.add(params: params)
 		
 		return req
@@ -353,6 +341,8 @@ open class OAuth2: OAuth2Base {
 	
 	/**
 	If there is a refresh token, use it to receive a fresh access token.
+	
+	If the request returns an error, the refresh token is thrown away.
 	
 	- parameter params:   Optional key/value pairs to pass during token refresh
 	- parameter callback: The callback to call after the refresh token exchange has finished
@@ -367,6 +357,7 @@ open class OAuth2: OAuth2Base {
 					let data = try response.responseData()
 					let json = try self.parseRefreshTokenResponseData(data)
 					if response.response.statusCode >= 400 {
+						self.clientConfig.refreshToken = nil
 						throw OAuth2Error.generic("Failed with status \(response.response.statusCode)")
 					}
 					self.logger?.debug("OAuth2", msg: "Did use refresh token for access token [\(nil != self.clientConfig.accessToken)]")
@@ -397,7 +388,7 @@ open class OAuth2: OAuth2Base {
 	                      on success
 	*/
 	func registerClientIfNeeded(callback: @escaping ((OAuth2JSON?, OAuth2Error?) -> Void)) {
-		if nil != clientId {
+		if nil != clientId || !type(of: self).clientIdMandatory {
 			callOnMainThread() {
 				callback(nil, nil)
 			}

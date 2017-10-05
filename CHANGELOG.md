@@ -5,6 +5,29 @@ Version numbering represents the Swift version, plus a running number representi
 You can also refer to commit logs to get details on what was implemented, fixed and improved.
 
 
+### 3.0.3
+
+- Allow more UI customization via `authConfig.UI` and making `OAuth2Authorizer` friendlier to subclassing
+- Implement custom authorization UIs for password grants (thanks @amaurydavid !)
+- Optionally allow `DataLoader` to follow 302 redirects automatically (on same host)
+- Fix a bug with data loader not using refresh tokens (#184)
+
+
+### 3.0.2
+
+- Move `secretInBody` and `customParameters` from `authConfig` to `clientConfig`, where they belong
+- Allow to override default UTF-8 encoding of the _Basic_ authorization header
+- Improvements to embedded authorization
+- Remove `onAuthorize` and `onFailure` callbacks, which have been deprecated with 3.0 (now handled in the callback to `authorize()`)
+
+
+### 3.0.1
+
+- Add Azure flow (thanks @everlof)
+- Add `keychain_account_*` settings (thanks @aidzz)
+- Workaround for Safari issue (thanks @everlof)
+
+
 ### 3.0.0
 
 - Rewrite in Swift 3
@@ -116,7 +139,7 @@ You can also refer to commit logs to get details on what was implemented, fixed 
 
 ### 2.0.2
 
-- Fix issue #53, not detecting cancelling the `SFSafariViewController` by the user
+- Fix issue #53, not detecting canceling the `SFSafariViewController` by the user
 
 
 ### 2.0.1

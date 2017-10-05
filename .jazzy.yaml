@@ -15,6 +15,7 @@ custom_categories:
     children:
       - OAuth2CodeGrant
       - OAuth2CodeGrantBasicAuth
+      - OAuth2CodeGrantAzure
       - OAuth2CodeGrantFacebook
       - OAuth2CodeGrantLinkedIn
       - OAuth2CodeGrantNoTokenType
@@ -22,6 +23,7 @@ custom_categories:
       - OAuth2ClientCredentialsReddit
       - OAuth2ImplicitGrant
       - OAuth2PasswordGrant
+      - OAuth2PasswordGrantDelegate
     
   - name: Errors & Types
     children:
@@ -67,7 +69,11 @@ custom_categories:
     children:
       - OAuth2AuthorizerUI
       - OAuth2Authorizer
+      - OAuth2CustomAuthorizerUI
+      - OAuth2CustomAuthorizer
       - OAuth2ContextStore
       - OAuth2KeychainAccount
       - OAuth2WebViewController
+      - OAuth2DataLoaderSessionTaskDelegate
+
       

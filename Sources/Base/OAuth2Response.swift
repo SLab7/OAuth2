@@ -51,6 +51,14 @@ open class OAuth2Response {
 	open var error: Error?
 	
 	
+	/**
+	Designated initializer.
+	
+	- parameter data:     Data that was returned
+	- parameter request:  The request to which we responded
+	- parameter response: The `HTTPURLResponse` to be represented by this instance
+	- parameter error:    Error that occurred when handling our request
+	*/
 	public init(data: Data?, request: URLRequest, response: HTTPURLResponse, error: Error?) {
 		self.data = data
 		self.request = request
@@ -72,7 +80,7 @@ open class OAuth2Response {
 	*/
 	open func responseData() throws -> Data {
 		if let error = error {
-			if NSURLErrorDomain == error._domain && -999 == error._code {		// request was cancelled
+			if NSURLErrorDomain == error._domain && -999 == error._code {		// request was canceled
 				throw OAuth2Error.requestCancelled
 			}
 			throw error
@@ -83,7 +91,7 @@ open class OAuth2Response {
 		else if 403 == response.statusCode {
 			throw OAuth2Error.forbidden
 		}
-		else if let data = data {
+		else if let data = data, data.count > 0 {
 			return data
 		}
 		else {

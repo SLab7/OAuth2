@@ -27,8 +27,11 @@ Usage
 
 To use OAuth2 in your own code, start with `import OAuth2` (use `p2_OAuth2` if you installed _p2.OAuth2_ via CocoaPods) in your source files.
 
-A typical code grant flow is used for demo purposes below.
+In OAuth2 there are [**different kinds of _flows_**](https://tools.ietf.org/html/rfc6749#page-2).
+This library supports all of them, make sure you're using the correct one for your use-case and authorization server.
+A typical **code grant flow** is used for demo purposes below.
 The steps for other flows are mostly the same short of instantiating a different subclass and using different client settings.
+
 Still not working?
 See [site-specific peculiarities](#site-specific-peculiarities).
 
@@ -50,7 +53,10 @@ let oauth2 = OAuth2CodeGrant(settings: [
 ```
 
 See those `redirect_uris`?
-You can use the scheme you want, but you must **a)** declare the scheme you use in your `Info.plist` and **b)** register the very same URI on the website you connect to.
+You can use the scheme you want, but you must **a)** declare the scheme you use in your `Info.plist` and **b)** register the very same URI on the authorization server you connect to.
+
+Note that **as of iOS 9**, you _should_ use [Universal Links](https://developer.apple.com/library/content/documentation/General/Conceptual/AppSearch/UniversalLinks.html) as your redirect URL, rather than a custom app scheme.
+This prevents others from re-using your URI scheme and intercept the authorization flow.
 
 Want to avoid switching to Safari and pop up a SafariViewController or NSPanel?
 Set this:
@@ -140,7 +146,7 @@ oauth2.authorize() { authParameters, error in
         print("Authorized! Additional parameters: \(params)")
     }
     else {
-        print("Authorization was cancelled or went wrong: \(error)")   // error will not be nil
+        print("Authorization was canceled or went wrong: \(error)")   // error will not be nil
     }
 }
 
@@ -166,7 +172,7 @@ You only need to inspect the _authParameters_ dictionary if you wish to extract 
 
 For advanced use outlined below, there is the `afterAuthorizeOrFail` block that you can use on your OAuth2 instance.
 The `internalAfterAuthorizeOrFail` closure is, as its name suggests, provided for internal purposes – it is exposed for subclassing and compilation reasons and you should not mess with it.
-Additionally, as of version 3.0, there are deprecated callback properties `onAuthorize` and `onFailure` that you should no longer use.
+As of version 3.0.2, you can no longer use the `onAuthorize` and `onFailure` callback properties, they have been removed entirely.
 
 ### 6. Make Requests
 
@@ -309,7 +315,7 @@ It has however become common practice to still use code grants from mobile devic
 
 This class fully supports those flows, it automatically creates a “Basic” Authorization header if the client has a non-nil client secret.
 This means that you likely **must** specify `client_secret` in your settings; if there is none (like for [Reddit](https://github.com/reddit/reddit/wiki/OAuth2#token-retrieval-code-flow)) specify the empty string.
-If the site requires client credentials in the request body, set `secretInBody` to true, as explained below.
+If the site requires client credentials in the request body, set `clientConfig.secretInBody` to true, as explained below.
 
 #### Implicit Grant
 
@@ -368,14 +374,14 @@ Similarly, if you want to take care of dismissing the login screen yourself:
 
 Some sites also want the client-id/secret combination in the request _body_, not in the _Authorization_ header:
 
-    oauth2.authConfig.secretInBody = true
+    oauth2.clientConfig.secretInBody = true
     // or in your settings:
     "secret_in_body": true
 
 Sometimes you also need to provide additional authorization parameters.
 This can be done in 3 ways:
 
-    oauth2.clientConfig.authParameters = ["duration": "permanent"]
+    oauth2.authParameters = ["duration": "permanent"]
     // or in your settings:
     "parameters": ["duration": "permanent"]
     // or when you authorize manually:
